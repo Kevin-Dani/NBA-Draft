@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2K Draft Simulator</title>
+    
+    <!-- Load Tailwind CSS from CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Use Inter font */
+        html { font-family: 'Inter', sans-serif; }
+        /* Custom styles for modal */
+        #draftModal {
+            transition: opacity 0.3s ease-in-out;
+        }
+        #draftModal.hidden {
+            display: none;
+        }
+        .player-card {
+            transition: all 0.2s ease-in-out;
+        }
+        .player-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        /* Style for selected player slot */
+        .roster-slot.active-slot {
+            background-color: #2563eb; /* blue-600 */
+            color: white;
+            border-color: #1d4ed8; /* blue-800 */
+        }
+        /* New style for slots you can replace */
+        .roster-slot.replaceable:hover {
+            cursor: pointer;
+            background-color: #b91c1c; /* red-700 */
+            border-color: #f87171; /* red-400 */
+            transform: scale(1.02);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white p-4 md:p-8 font-sans">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white mb-2">2K Draft Simulator</h1>
+            <p class="text-lg text-gray-400">Draft 2 teams of 10 players</p>
+            <button id="resetButton" class="mt-4 px-6 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold shadow-lg transition-all">Reset Draft</button>
+        </header>
+
+        <!-- Draft Controls -->
+        <div id="draftControls" class="bg-gray-800 rounded-lg p-6 mb-8 shadow-xl">
+            <h2 class="text-2xl font-semibold mb-4 text-center">Draft Controls</h2>
+            
+            <!-- Turn Indicator -->
+            <div id="draft-turn-indicator" class="text-center mb-6 h-8">
+                <h3 class="text-2xl font-bold text-gray-300">Choose a team to draft for</h3>
+            </div>
+            
+            <!-- Team Selection Buttons -->
+            <div id="team-selection-buttons" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <button id="draft-team-1" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Draft for Team 1
+                </button>
+                <button id="draft-team-2" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Draft for Team 2
+                </button>
+            </div>
+
+            <!-- Pool Buttons -->
+            <div id="pool-buttons" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button data-pool="1" class="draft-pool-button bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Draft from Pool 1 (96-99)
+                </button>
+                <button data-pool="2" class="draft-pool-button bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Draft from Pool 2 (92-95)
+                </button>
+                <button data-pool="3" class="draft-pool-button bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg text-lg shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    Draft from Pool 3 (87-91)
+                </button>
+            </div>
+            <div id="draft-message-area" class="text-center text-yellow-400 mt-4 h-6"></div>
+        </div>
+
+        <!-- Reroll Section (MOVED) -->
+        <div id="reroll-zone" class="bg-gray-800 rounded-lg p-6 shadow-xl mb-8"> <!-- Moved here, changed mt-8 to mb-8 -->
+            <h2 class="text-2xl font-semibold mb-4 text-center">Reroll Player</h2>
+            <div class="flex flex-col md:flex-row gap-4 items-center">
+                <!-- Reroll Buttons -->
+                <div class="flex-shrink-0 grid grid-cols-2 gap-2">
+                    <button id="start-reroll-button" class="px-6 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg shadow-md transition-all disabled:opacity-50">
+                        Start Reroll
+                    </button>
+                    <button id="cancel-reroll-button" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg shadow-md transition-all disabled:opacity-50">
+                        Cancel
+                    </button>
+                </div>
+                <!-- Reroll Holding Slot -->
+                <div id="reroll-holding-slot" class="flex-grow w-full bg-gray-700 rounded-lg p-3 shadow-inner flex justify-between items-center border border-gray-600">
+                    <div>
+                        <p class="slot-position text-lg font-semibold text-yellow-300">Player to Place</p>
+                        <p class="slot-player-name text-xl text-white">- Empty -</p>
+                    </div>
+                     <!-- Rating for reroll slot -->
+                    <span class="slot-player-rating hidden text-3xl font-extrabold text-yellow-300">99</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Rosters -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- Team 1 -->
+            <div class="bg-gray-800 rounded-lg p-6 shadow-xl">
+                <h2 class="text-3xl font-bold mb-6 text-center text-blue-300">Team 1</h2>
+                <div id="team-1-roster" class="space-y-3">
+                    <!-- Roster slots will be generated by JS -->
+                </div>
+            </div>
+
+            <!-- Team 2 -->
+            <div class="bg-gray-800 rounded-lg p-6 shadow-xl">
+                <h2 class="text-3xl font-bold mb-6 text-center text-red-300">Team 2</h2>
+                <div id="team-2-roster" class="space-y-3">
+                    <!-- Roster slots will be generated by JS -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Draft Modal -->
+    <div id="draftModal" class="hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-6 md:p-8 w-full max-w-4xl">
+            <!-- Modal Title -->
+            <h2 id="modal-title" class="text-3xl font-bold text-center mb-6">Choose Your Player</h2>
+            <!-- Player choices will be injected here -->
+            <div id="draft-choice-area" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Player cards will be generated by JS -->
+            </div>
+            <p id="modal-error" class="text-red-400 text-center mt-4"></p>
+        </div>
+    </div>
+
+    <!-- TEMPLATES (not visible) -->
+
+    <!-- Player Card Template (for modal) -->
+    <template id="player-card-template">
+        <div class="player-card bg-gray-700 rounded-lg p-4 shadow-lg border-2 border-gray-600 cursor-pointer">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="player-name text-2xl font-bold">Player Name</h3>
+                <span class="player-rating text-3xl font-extrabold text-yellow-300">99</span>
+            </div>
+            <p class="player-position text-lg text-gray-300">Position</p>
+            <p class="player-team text-md text-gray-400">Team</p>
+            <p class="player-era text-sm text-gray-500 italic">Era</p>
+        </div>
+    </template>
+
+    <!-- Roster Slot Template (for team lists) -->
+    <template id="roster-slot-template">
+        <div class="roster-slot bg-gray-700 rounded-lg p-3 shadow-inner flex justify-between items-center border border-gray-600">
+            <div>
+                <p class="slot-position text-lg font-semibold text-gray-300">Position</p>
+                <p class="slot-player-name text-xl text-white">- Empty -</p>
+            </div>
+            <!-- Player rating span (will be hidden when empty) -->
+            <span class="slot-player-rating hidden text-3xl font-extrabold text-yellow-300">99</span>
+        </div>
+    </template>
+
+<script type="text/javascript">
+    // --- DATABASE ---
+    const playerDatabase = [{ id: 1, name: "Nikola Jokic", position: "C", team: "Nuggets", rating: 99, era: "Current" },
+    { id: 2, name: "Shai Gilgeous-Alexander", position: "PG", team: "Thunder", rating: 98, era: "Current" },
+    { id: 3, name: "Giannis Antetokounmpo", position: "PF", team: "Bucks", rating: 97, era: "Current" },
+    { id: 4, name: "Luka Doncic", position: "PG", team: "Lakers", rating: 97, era: "Current" },
+    { id: 5, name: "Victor Wembanyama", position: "C", team: "Spurs", rating: 95, era: "Current" },
+    { id: 6, name: "Antony Edwards", position: "SG", team: "Timberwolves", rating: 95, era: "Current" },
+    { id: 7, name: "Jayson Tatum", position: "PF", team: "Celtic", rating: 94, era: "Current" },
+    { id: 8, name: "Donovan Mitchell", position: "SG", team: "Cavaliers", rating: 93, era: "Current" },
+    { id: 9, name: "Jalen Brunson", position: "PG", team: "Knicks", rating: 93, era: "Current" },
+    { id: 10, name: "Tyrese Haliburton", position: "PG", team: "Pacers", rating: 93, era: "Current" },
+    { id: 11, name: "Cade Cunningham", position: "PG", team: "Pistons", rating: 92, era: "Current" },
+    { id: 12, name: "Devin Booker", position: "PG", team: "Suns", rating: 92, era: "Current" },
+    { id: 13, name: "Jaylen Brown", position: "SF", team: "Celtic", rating: 91, era: "Current" },
+    { id: 14, name: "Karl Anthony Towns", position: "PF", team: "Knicks", rating: 90, era: "Current" },
+    { id: 15, name: "Jalen Williams", position: "PF", team: "Thunder", rating: 90, era: "Current" },
+    { id: 16, name: "Paolo Banchero", position: "PF", team: "Magic", rating: 90, era: "Current" },
+    { id: 17, name: "Ja Morant", position: "PG", team: "Grizzlies", rating: 89, era: "Current" },
+    { id: 18, name: "Evan Mobley", position: "PF", team: "Cavaliers", rating: 89, era: "Current" },
+    { id: 19, name: "Pascal Siakam", position: "PF", team: "Pacers", rating: 89, era: "Current" },
+    { id: 20, name: "Bam Adebayo", position: "C", team: "Heat", rating: 89, era: "Current" },
+    { id: 21, name: "Tyrese Maxey", position: "PG", team: "76ers", rating: 89, era: "Current" },
+    { id: 22, name: "Trae Young", position: "PG", team: "Hawks", rating: 88, era: "Current" },
+    { id: 23, name: "Chet Holmgren", position: "C", team: "Thunder", rating: 88, era: "Current" },
+    { id: 24, name: "Alperen Sengun", position: "C", team: "Rockets", rating: 88, era: "Current" },
+    { id: 25, name: "LaMello Ball", position: "PG", team: "Hornets", rating: 88, era: "Current" },
+    { id: 26, name: "Julius Randle", position: "PF", team: "Timberwolves", rating: 88, era: "Current" },
+    { id: 27, name: "Austin Reaves", position: "SG", team: "Lakers", rating: 88, era: "Current" },
+    { id: 28, name: "Darius Garland", position: "PG", team: "Cavaliers", rating: 87, era: "Current" },
+    { id: 29, name: "Zion Williamson", position: "PF", team: "Pelicans", rating: 89, era: "All-Time" },
+    { id: 30, name: "Amen Thompson", position: "SG", team: "Rockets", rating: 87, era: "Current" },
+    { id: 31, name: "Lauri Markkanen", position: "SF", team: "Jazz", rating: 87, era: "Current" },
+    { id: 32, name: "Michael Jordan", position: "SG", team: "Bulls", rating: 99, era: "All-Time" },
+    { id: 33, name: "Lebron James", position: "SF", team: "Heat", rating: 99, era: "All-Time" },
+    { id: 34, name: "Karem Abdul-Jabbar", position: "C", team: "Bucks", rating: 99, era: "All-Time" },
+    { id: 35, name: "Kobe Bryant", position: "SG", team: "Lakers", rating: 99, era: "All-Time" },
+    { id: 36, name: "Wilt Chamberlain", position: "C", team: "Warriors", rating: 99, era: "All-Time" },
+    { id: 37, name: "Hakeem Olajuwon", position: "C", team: "Rockets", rating: 99, era: "All-Time" },
+    { id: 38, name: "Larry Bird", position: "SF", team: "Celtic", rating: 99, era: "All-Time" },
+    { id: 39, name: "Magic Johnson", position: "PG", team: "Lakers", rating: 99, era: "All-Time" },
+    { id: 40, name: "Kevin Garnett", position: "PF", team: "Timberwolves", rating: 98, era: "All-Time" },
+    { id: 41, name: "Tim Duncan", position: "PF", team: "Spurs", rating: 98, era: "All-Time" },
+    { id: 42, name: "Shaquille O'Neal", position: "C", team: "Lakers", rating: 98, era: "All-Time" },
+    { id: 43, name: "Dirk Nowitzki", position: "PF", team: "Mavericks", rating: 98, era: "All-Time" },
+    { id: 44, name: "Stephen Curry", position: "PG", team: "Warriors", rating: 98, era: "All-Time" },
+    { id: 45, name: "Bill Russel", position: "C", team: "Celtic", rating: 98, era: "All-Time" },
+    { id: 46, name: "Kevin Durant", position: "SF", team: "Warriors", rating: 97, era: "All-Time" },
+    { id: 47, name: "Oscar Robertson", position: "PG", team: "Kings", rating: 97, era: "All-Time" },
+    { id: 48, name: "Chris Paul", position: "PG", team: "Pelicans", rating: 97, era: "All-Time" },
+    { id: 49, name: "Dwayne Wade", position: "SG", team: "Heat", rating: 97, era: "All-Time" },
+    { id: 50, name: "Karl Malone", position: "PF", team: "Jazz", rating: 97, era: "All-Time" },
+    { id: 51, name: "John Stockton", position: "PG", team: "Jazz", rating: 97, era: "All-Time" },
+    { id: 52, name: "Moses Malone", position: "C", team: "Rockets", rating: 97, era: "All-Time" },
+    { id: 53, name: "Scottie Pipen", position: "SF", team: "Bulls", rating: 97, era: "All-Time" },
+    { id: 54, name: "Vince Carter", position: "SF", team: "Raptors", rating: 96, era: "All-Time" },
+    { id: 55, name: "Clyde Drexler", position: "SG", team: "Trail Blazers", rating: 96, era: "All-Time" },
+    { id: 56, name: "Allen Iverson", position: "SG", team: "76ers", rating: 96, era: "All-Time" },
+    { id: 57, name: "Bob Cousy", position: "PG", team: "Celtic", rating: 96, era: "All-Time" },
+    { id: 58, name: "Elgin Baylor", position: "SF", team: "Lakers", rating: 96, era: "All-Time" },
+    { id: 59, name: "John Havlicek", position: "SF", team: "Celtic", rating: 96, era: "All-Time" },
+    { id: 60, name: "David Robinson", position: "C", team: "Spurs", rating: 96, era: "All-Time" },
+    { id: 61, name: "Kawhi Leonard", position: "SF", team: "Raptors", rating: 96, era: "All-Time" },
+    { id: 62, name: "Steve Nash", position: "PG", team: "Suns", rating: 96, era: "All-Time" },
+    { id: 63, name: "Rick Barry", position: "SF", team: "Warriors", rating: 95, era: "All-Time" },
+    { id: 64, name: "Kevin McHale", position: "PF", team: "Celtic", rating: 95, era: "All-Time" },
+    { id: 65, name: "Jerry Lucas", position: "PF", team: "Kings", rating: 95, era: "All-Time" },
+    { id: 66, name: "Derrick Rose", position: "PG", team: "Bulls", rating: 95, era: "All-Time" },
+    { id: 67, name: "Dominique Wilkins", position: "SF", team: "Hawks", rating: 95, era: "All-Time" },
+    { id: 68, name: "David Thompson", position: "SG", team: "Nuggets", rating: 95, era: "All-Time" },
+    { id: 69, name: "Tony Parker", position: "PG", team: "Spurs", rating: 95, era: "All-Time" },
+    { id: 70, name: "Bill Walton", position: "C", team: "Trail Blazers", rating: 95, era: "All-Time" },
+    { id: 71, name: "Isiah Thomas", position: "PG", team: "Pistons", rating: 95, era: "All-Time" },
+    { id: 72, name: "Russel Westbrook", position: "PG", team: "Thunder", rating: 95, era: "All-Time" },
+    { id: 73, name: "Patrick Ewing", position: "C", team: "knicks", rating: 95, era: "All-Time" },
+    { id: 74, name: "Bob Pettit", position: "PF", team: "Hawks", rating: 95, era: "All-Time" },
+    { id: 75, name: "Tracy McGrady", position: "SG", team: "Magic", rating: 95, era: "All-Time" },
+    { id: 76, name: "James Harden", position: "SG", team: "Rockets", rating: 95, era: "All-Time" },
+    { id: 77, name: "Dave Cowens", position: "C", team: "Celtic", rating: 95, era: "All-Time" },
+    { id: 78, name: "Carmelo Anthony", position: "SG", team: "Nuggets", rating: 95, era: "All-Time" },
+    { id: 79, name: "Gary Payton", position: "PG", team: "Thunder", rating: 95, era: "All-Time" },
+    { id: 80, name: "Jason Kidd", position: "PG", team: "Nets", rating: 95, era: "All-Time" },
+    { id: 81, name: "Ray Allen", position: "SG", team: "Thunder", rating: 94, era: "All-Time" },
+    { id: 82, name: "Pete Maravich", position: "SG", team: "Jazz", rating: 94, era: "All-Time" },
+    { id: 83, name: "George Mikan", position: "C", team: "Lakers", rating: 94, era: "All-Time" },
+    { id: 84, name: "George Gervin", position: "SF", team: "Spurs", rating: 94, era: "All-Time" },
+    { id: 85, name: "Elvin Hayes", position: "PF", team: "Wizards", rating: 94, era: "All-Time" },
+    { id: 86, name: "Paul Pierce", position: "SF", team: "Celtic", rating: 94, era: "All-Time" },
+    { id: 87, name: "Damian Lilliard", position: "PG", team: "Trail Blazers", rating: 94, era: "All-Time" },
+    { id: 88, name: "Kyrie Irving", position: "PG", team: "Cavaliers", rating: 94, era: "All-Time" },
+    { id: 89, name: "Chris Mullins", position: "SF", team: "Warriors", rating: 94, era: "All-Time" },
+    { id: 90, name: "Mitch Richmond", position: "SG", team: "Kings", rating: 94, era: "All-Time" },
+    { id: 91, name: "Penny Hardaway", position: "PG", team: "Magic", rating: 94, era: "All-Time" },
+    { id: 92, name: "Dolph Schayes", position: "PF", team: "76ers", rating: 94, era: "All-Time" },
+    { id: 93, name: "Sidney Moncrief", position: "SG", team: "Bucks", rating: 94, era: "All-Time" },
+    { id: 94, name: "Jo Jo White", position: "PG", team: "Celtic", rating: 94, era: "All-Time" },
+    { id: 95, name: "Julius Erving", position: "SF", team: "76ers", rating: 94, era: "All-Time" },
+    { id: 96, name: "Nate Archibald", position: "PG", team: "Kings", rating: 94, era: "All-Time" },
+    { id: 97, name: "Bob McAdoo", position: "C", team: "Clippers", rating: 94, era: "All-Time" },
+    { id: 98, name: "Wes Unseld", position: "C", team: "Wizards", rating: 94, era: "All-Time" },
+    { id: 99, name: "Anthony Davis", position: "PF", team: "Lakers", rating: 94, era: "All-Time" },
+    { id: 100, name: "Alonzo Mourning", position: "C", team: "Heat", rating: 94, era: "All-Time" },
+    { id: 101, name: "Dwight Howard", position: "C", team: "Heat", rating: 94, era: "All-Time" },
+    { id: 102, name: "Willis Reed", position: "C", team: "Knicks", rating: 94, era: "All-Time" },
+    { id: 103, name: "Dennis Johnson", position: "PG", team: "Suns", rating: 94, era: "All-Time" },
+    { id: 104, name: "Gilbert Arenas", position: "PG", team: "Wizards", rating: 93, era: "All-Time" },
+    { id: 105, name: "Mark Price", position: "PG", team: "Cavaliers", rating: 93, era: "All-Time" },
+    { id: 106, name: "Chris Webber", position: "PF", team: "Kings", rating: 93, era: "All-Time" },
+    { id: 107, name: "Jimmy Butler", position: "SF", team: "Heat", rating: 93, era: "All-Time" },
+    { id: 108, name: "Robert Parish", position: "C", team: "Celtic", rating: 93, era: "All-Time" },
+    { id: 109, name: "Paul George", position: "SF", team: "Pacers", rating: 93, era: "All-Time" },
+    { id: 110, name: "Joel Embiid", position: "C", team: "76ers", rating: 95, era: "All-Time" },
+    { id: 111, name: "Billy Cunningham", position: "SF", team: "76ers", rating: 93, era: "All-Time" },
+    { id: 112, name: "Bobby Jones", position: "SF", team: "76ers", rating: 90, era: "All-Time" },
+    { id: 113, name: "Hal Greer", position: "PG", team: "76ers", rating: 88, era: "All-Time" },
+    { id: 114, name: "Hersey Hawkins", position: "SG", team: "76ers", rating: 87, era: "All-Time" },
+    { id: 115, name: "George McGinnis", position: "PF", team: "Pacers", rating: 89, era: "All-Time" },
+    { id: 116, name: "Doug Collins", position: "SG", team: "76ers", rating: 87, era: "All-Time" },
+    { id: 117, name: "Marques Johnson", position: "SF", team: "Bucks", rating: 92, era: "All-Time" },
+    { id: 118, name: "Bob Dandridge", position: "SF", team: "Bucks", rating: 88, era: "All-Time" },
+    { id: 119, name: "Khris Middleton", position: "SF", team: "Bucks", rating: 88, era: "All-Time" },
+    { id: 120, name: "Junior Bridgeman", position: "SF", team: "Bucks", rating: 87, era: "All-Time" },
+    { id: 121, name: "Vin Baker", position: "PF", team: "Bucks", rating: 87, era: "All-Time" },
+    { id: 122, name: "Terry Cummings", position: "PF", team: "Bucks", rating: 87, era: "All-Time" },
+    { id: 123, name: "Glenn Robinson", position: "SF", team: "Bucks", rating: 87, era: "All-Time" },
+    { id: 124, name: "Artis Gilmore", position: "C", team: "Bulls", rating: 93, era: "All-Time" },
+    { id: 125, name: "Dennis Rodman", position: "PF", team: "Bulls", rating: 93, era: "All-Time" },
+    { id: 126, name: "Bob Love", position: "PF", team: "Bulls", rating: 89, era: "All-Time" },
+    { id: 127, name: "Jerry Sloan", position: "SG", team: "Bulls", rating: 89, era: "All-Time" },
+    { id: 128, name: "Joakim Noah", position: "C", team: "Bulls", rating: 87, era: "All-Time" },
+    { id: 129, name: "BJ Armstrong", position: "PG", team: "Bulls", rating: 87, era: "All-Time" },
+    { id: 130, name: "Brad Daugherty", position: "C", team: "Cavaliers", rating: 90, era: "All-Time" },
+    { id: 131, name: "Evan Mobley", position: "PF", team: "Cavaliers", rating: 89, era: "All-Time" },
+    { id: 132, name: "Zydrunas Ilgauskas", position: "C", team: "Cavaliers", rating: 88, era: "All-Time" },
+    { id: 133, name: "Larry Nance", position: "SF", team: "Cavaliers", rating: 88, era: "All-Time" },
+    { id: 134, name: "Terrell Brandon", position: "PG", team: "Cavaliers", rating: 87, era: "All-Time" },
+    { id: 135, name: "Bill Sharman", position: "SG", team: "Celtic", rating: 92, era: "All-Time" },
+    { id: 136, name: "Rajon Rondo", position: "PG", team: "Celtic", rating: 90, era: "All-Time" },
+    { id: 137, name: "Tom Heinsohn", position: "PF", team: "Celtic", rating: 89, era: "All-Time" },
+    { id: 138, name: "Elton Brand", position: "PF", team: "Clippers", rating: 90, era: "All-Time" },
+    { id: 139, name: "World B. Free", position: "PG", team: "Clippers", rating: 89, era: "All-Time" },
+    { id: 140, name: "Ron Harper", position: "PG", team: "Clippers", rating: 89, era: "All-Time" },
+    { id: 141, name: "Blake Griffin", position: "PF", team: "Clippers", rating: 88, era: "All-Time" },
+    { id: 142, name: "DeAndre Jordan", position: "C", team: "Clippers", rating: 87, era: "All-Time" },
+    { id: 143, name: "Danny Manning", position: "PF", team: "Clippers", rating: 87, era: "All-Time" },
+    { id: 144, name: "Chris Kaman", position: "C", team: "Clippers", rating: 87, era: "All-Time" },
+    { id: 145, name: "Zach Randolph", position: "PF", team: "Grizzlies", rating: 89, era: "All-Time" },
+    { id: 146, name: "Mike Conley", position: "PG", team: "Grizzlies", rating: 88, era: "All-Time" },
+    { id: 147, name: "Dikembe Mutombo", position: "C", team: "Hawks", rating: 92, era: "All-Time" },
+    { id: 148, name: "Cliff Hagan", position: "SF", team: "Hawks", rating: 91, era: "All-Time" },
+    { id: 149, name: "Lou Hudson", position: "SF", team: "Hawks", rating: 91, era: "All-Time" },
+    { id: 150, name: "Joe Johnson", position: "SF", team: "Hawks", rating: 89, era: "All-Time" },
+    { id: 151, name: "Joe Caldwell", position: "SG", team: "Hawks", rating: 88, era: "All-Time" },
+    { id: 152, name: "Kevin Willis", position: "PF", team: "Hawks", rating: 87, era: "All-Time" },
+    { id: 153, name: "Steve Smith", position: "SG", team: "Hawks", rating: 87, era: "All-Time" },
+    { id: 154, name: "Kemba Walker", position: "PG", team: "Hornets", rating: 89, era: "All-Time" },
+    { id: 155, name: "Eddie Jones", position: "SG", team: "Hornets", rating: 89, era: "All-Time" },
+    { id: 156, name: "Larry Johnson", position: "PF", team: "Hornets", rating: 88, era: "All-Time" },
+    { id: 157, name: "Adrian Dantley", position: "SF", team: "Jazz", rating: 91, era: "All-Time" },
+    { id: 158, name: "Mark Eaton", position: "C", team: "Jazz", rating: 89, era: "All-Time" },
+    { id: 159, name: "Andrei Kirilenko", position: "PF", team: "Jazz", rating: 89, era: "All-Time" },
+    { id: 160, name: "Gordon Hayward", position: "SF", team: "Jazz", rating: 88, era: "All-Time" },
+    { id: 161, name: "Carlos Boozer", position: "PF", team: "Jazz", rating: 88, era: "All-Time" },
+    { id: 162, name: "Darrel Griffith", position: "SG", team: "Jazz", rating: 87, era: "All-Time" },
+    { id: 163, name: "Deron Williams", position: "PG", team: "Jazz", rating: 87, era: "All-Time" },
+    { id: 164, name: "DeMarcus Cousins", position: "C", team: "Kings", rating: 90, era: "All-Time" },
+    { id: 165, name: "Wayne Embry", position: "C", team: "Kings", rating: 90, era: "All-Time" },
+    { id: 166, name: "Peja Stojakovic", position: "SF", team: "Kings", rating: 88, era: "All-Time" },
+    { id: 167, name: "Mike Bibby", position: "PG", team: "Kings", rating: 88, era: "All-Time" },
+    { id: 168, name: "Vlade Divac", position: "C", team: "Kings", rating: 88, era: "All-Time" },
+    { id: 169, name: "Domantas Sabonis", position: "PF", team: "Kings", rating: 88, era: "All-Time" },
+    { id: 170, name: "Otis Birdsong", position: "SG", team: "Kings", rating: 87, era: "All-Time" },
+    { id: 171, name: "Richie Guerin", position: "SG", team: "Knicks", rating: 92, era: "All-Time" },
+    { id: 172, name: "Dave Debusschere", position: "PF", team: "Knicks", rating: 92, era: "All-Time" },
+    { id: 173, name: "Allan Houston", position: "SG", team: "Knicks", rating: 89, era: "All-Time" },
+    { id: 174, name: "Bernard King", position: "SF", team: "Knicks", rating: 89, era: "All-Time" },
+    { id: 175, name: "Michael Ray Richardson", position: "PG", team: "Knicks", rating: 89, era: "All-Time" },
+    { id: 176, name: "Amar'e Stoudemire", position: "PF", team: "Suns", rating: 92, era: "All-Time" },
+    { id: 177, name: "John Starks", position: "SG", team: "Knicks", rating: 88, era: "All-Time" },
+    { id: 178, name: "Earl Monroe", position: "PG", team: "Wizards", rating: 89, era: "All-Time" },
+    { id: 179, name: "Pau Gasol", position: "C", team: "Lakers", rating: 91, era: "All-Time" },
+    { id: 180, name: "Gail Goodrich", position: "SG", team: "Lakers", rating: 89, era: "All-Time" },
+    { id: 181, name: "Jamaal Wilkes", position: "SF", team: "Lakers", rating: 87, era: "All-Time" },
+    { id: 182, name: "Derek Harper", position: "PG", team: "Mavericks", rating: 89, era: "All-Time" },
+    { id: 183, name: "Rolando Blackman", position: "SG", team: "Mavericks", rating: 88, era: "All-Time" },
+    { id: 184, name: "Mark Aguirre", position: "SF", team: "Mavericks", rating: 88, era: "All-Time" },
+    { id: 185, name: "Jim Jackson", position: "SG", team: "Mavericks", rating: 88, era: "All-Time" },
+    { id: 186, name: "Michael Finley", position: "SF", team: "Mavericks", rating: 88, era: "All-Time" },
+    { id: 187, name: "Jamal Mashburn", position: "SF", team: "Hornets", rating: 89, era: "All-Time" },
+    { id: 188, name: "Drazen Petrovic", position: "SG", team: "Nets", rating: 90, era: "All-Time" },
+    { id: 189, name: "Buck Williams", position: "PF", team: "Nets", rating: 88, era: "All-Time" },
+    { id: 190, name: "Derrick Coleman", position: "PF", team: "Nets", rating: 88, era: "All-Time" },
+    { id: 191, name: "Kenny Anderson", position: "PG", team: "Nets", rating: 88, era: "All-Time" },
+    { id: 192, name: "Brook Lopez", position: "C", team: "Nets", rating: 87, era: "All-Time" },
+    { id: 193, name: "Richard Jefferson", position: "SF", team: "Nets", rating: 87, era: "All-Time" },
+    { id: 194, name: "Kenyon Martin", position: "PF", team: "Nets", rating: 87, era: "All-Time" },
+    { id: 195, name: "Alex English", position: "SF", team: "Nuggets", rating: 93, era: "All-Time" },
+    { id: 196, name: "Fat Lever", position: "PG", team: "Nuggets", rating: 92, era: "All-Time" },
+    { id: 197, name: "Dan Issel", position: "PF", team: "Nuggets", rating: 92, era: "All-Time" },
+    { id: 198, name: "Kiki Vandeweghe", position: "SF", team: "Nuggets", rating: 89, era: "All-Time" },
+    { id: 199, name: "Mahmoud Abdul-Rauf", position: "PG", team: "Nuggets", rating: 89, era: "All-Time" },
+    { id: 200, name: "Byron Beck", position: "PF", team: "Nuggets", rating: 89, era: "All-Time" },
+    { id: 201, name: "Antonio McDyess", position: "PF", team: "Nuggets", rating: 88, era: "All-Time" },
+    { id: 202, name: "Chauncey Billups", position: "PG", team: "Pistons", rating: 93, era: "All-Time" },
+    { id: 203, name: "Jamal Murray", position: "PG", team: "Nuggets", rating: 87, era: "All-Time" },
+    { id: 204, name: "Mel Daniels", position: "C", team: "Pacers", rating: 92, era: "All-Time" },
+    { id: 205, name: "Jermaine O'neal", position: "PF", team: "Pacers", rating: 91, era: "All-Time" },
+    { id: 206, name: "Freddie Lewis", position: "PG", team: "Pacers", rating: 89, era: "All-Time" },
+    { id: 207, name: "Danny Granger", position: "SF", team: "Pacers", rating: 88, era: "All-Time" },
+    { id: 208, name: "Ron Artest", position: "SF", team: "Pacers", rating: 88, era: "All-Time" },
+    { id: 209, name: "Bob Netolicky", position: "PF", team: "Pacers", rating: 88, era: "All-Time" },
+    { id: 210, name: "Rik Smits", position: "C", team: "Pacers", rating: 87, era: "All-Time" },
+    { id: 211, name: "Baron Davis", position: "C", team: "Hornets", rating: 92, era: "All-Time" },
+    { id: 212, name: "David West", position: "PF", team: "Hornets", rating: 88, era: "All-Time" },
+    { id: 213, name: "Joe Dumars", position: "SG", team: "Pistons", rating: 93, era: "All-Time" },
+    { id: 214, name: "Grant Hill", position: "SF", team: "Pistons", rating: 93, era: "All-Time" },
+    { id: 215, name: "Bob Lanier", position: "C", team: "Pistons", rating: 93, era: "All-Time" },
+    { id: 216, name: "Dave Bing", position: "PG", team: "Pistons", rating: 90, era: "All-Time" },
+    { id: 217, name: "Ben Wallace", position: "C", team: "Pistons", rating: 89, era: "All-Time" },
+    { id: 218, name: "Jerry Stackhouse", position: "SG", team: "Pistons", rating: 89, era: "All-Time" },
+    { id: 219, name: "Richard Hamilton", position: "SG", team: "Pistons", rating: 89, era: "All-Time" },
+    { id: 220, name: "Baily Howell", position: "PF", team: "Pistons", rating: 88, era: "All-Time" },
+    { id: 221, name: "Bill Laimbeer", position: "C", team: "Pistons", rating: 87, era: "All-Time" },
+    { id: 222, name: "Chris Bosh", position: "PF", team: "Raptors", rating: 90, era: "All-Time" },
+    { id: 223, name: "Kyle Lowry", position: "PG", team: "Raptors", rating: 89, era: "All-Time" },
+    { id: 224, name: "DeMar DeRozan", position: "SG", team: "Raptors", rating: 89, era: "All-Time" },
+    { id: 225, name: "Yao Ming", position: "C", team: "Rockets", rating: 91, era: "All-Time" },
+    { id: 226, name: "Calvin Murphy", position: "PG", team: "Rockets", rating: 91, era: "All-Time" },
+    { id: 227, name: "Ralph Sampson", position: "C", team: "Rockets", rating: 89, era: "All-Time" },
+    { id: 228, name: "Rudy Tomjanovich", position: "SF", team: "Rockets", rating: 88, era: "All-Time" },
+    { id: 229, name: "Steve Francis", position: "PG", team: "Rockets", rating: 88, era: "All-Time" },
+    { id: 230, name: "Kenny Smith", position: "PG", team: "Rockets", rating: 87, era: "All-Time" },
+    { id: 231, name: "Manu Ginobili", position: "SG", team: "Spurs", rating: 90, era: "All-Time" },
+    { id: 232, name: "Louie Dampier", position: "PG", team: "Spurs", rating: 89, era: "All-Time" },
+    { id: 233, name: "Larry Kenon", position: "SF", team: "Spurs", rating: 88, era: "All-Time" },
+    { id: 234, name: "Sean Elliot", position: "SF", team: "Spurs", rating: 87, era: "All-Time" },
+    { id: 235, name: "Shawn Marion", position: "SF", team: "Suns", rating: 91, era: "All-Time" },
+    { id: 236, name: "Walter Davis", position: "SG", team: "Suns", rating: 90, era: "All-Time" },
+    { id: 237, name: "Charlie Scott", position: "PG", team: "Suns", rating: 89, era: "All-Time" },
+    { id: 238, name: "Tom Chambers", position: "PF", team: "Suns", rating: 89, era: "All-Time" },
+    { id: 239, name: "Kevin Johnson", position: "PG", team: "Suns", rating: 89, era: "All-Time" },
+    { id: 240, name: "Dick Van Arsdale", position: "SG", team: "Suns", rating: 88, era: "All-Time" },
+    { id: 241, name: "Paul Westphal", position: "SG", team: "Suns", rating: 88, era: "All-Time" },
+    { id: 242, name: "Dan Majerle", position: "SG", team: "Suns", rating: 88, era: "All-Time" },
+    { id: 243, name: "Larry Nance", position: "SF", team: "Suns", rating: 88, era: "All-Time" },
+    { id: 244, name: "Shawn Kemp", position: "PF", team: "Thunder", rating: 90, era: "All-Time" },
+    { id: 245, name: "Rashard Lewis", position: "PF", team: "Thunder", rating: 89, era: "All-Time" },
+    { id: 246, name: "Gus Williams", position: "PG", team: "Thunder", rating: 89, era: "All-Time" },
+    { id: 247, name: "Spencer Haywood", position: "PF", team: "Thunder", rating: 89, era: "All-Time" },
+    { id: 248, name: "Jack Sikma", position: "C", team: "Thunder", rating: 89, era: "All-Time" },
+    { id: 249, name: "Jalen Williams", position: "PF", team: "Thunder", rating: 89, era: "All-Time" },
+    { id: 250, name: "Fred Brown", position: "PG", team: "Thunder", rating: 88, era: "All-Time" },
+    { id: 251, name: "Dale Ellis", position: "SG", team: "Thunder", rating: 88, era: "All-Time" },
+    { id: 252, name: "Xavier McDaniel", position: "SF", team: "Thunder", rating: 87, era: "All-Time" },
+    { id: 253, name: "Detlef Schrempf", position: "SF", team: "Thunder", rating: 87, era: "All-Time" },
+    { id: 254, name: "Kevin Love", position: "PF", team: "Timberwolves", rating: 91, era: "All-Time" },
+    { id: 255, name: "Tom Gugliotta", position: "PF", team: "Timberwolves", rating: 88, era: "All-Time" },
+    { id: 256, name: "Sam Cassell", position: "PG", team: "Timberwolves", rating: 88, era: "All-Time" },
+    { id: 257, name: "Stephon Marbury", position: "PG", team: "Timberwolves", rating: 87, era: "All-Time" },
+    { id: 258, name: "Brandon Roy", position: "SG", team: "Trail Blazers", rating: 91, era: "All-Time" },
+    { id: 259, name: "Maurice Lucas", position: "PF", team: "Trail Blazers", rating: 90, era: "All-Time" },
+    { id: 260, name: "LaMarcus Aldridge", position: "PF", team: "Trail Blazers", rating: 89, era: "All-Time" },
+    { id: 261, name: "Arvydas Sabonis", position: "C", team: "Trail Blazers", rating: 88, era: "All-Time" },
+    { id: 262, name: "Geoff Petrie", position: "SG", team: "Trail Blazers", rating: 87, era: "All-Time" },
+    { id: 263, name: "Jerome Kersey", position: "SF", team: "Trail Blazers", rating: 87, era: "All-Time" },
+    { id: 264, name: "Terry Porter", position: "PG", team: "Trail Blazers", rating: 87, era: "All-Time" },
+    { id: 265, name: "Sidney Wicks", position: "PF", team: "Trail Blazers", rating: 87, era: "All-Time" },
+    { id: 266, name: "Nate Thurmond", position: "C", team: "Warriors", rating: 92, era: "All-Time" },
+    { id: 267, name: "Klay Thompson", position: "SG", team: "Warriors", rating: 91, era: "All-Time" },
+    { id: 268, name: "Paul Arizin", position: "SF", team: "Warriors", rating: 91, era: "All-Time" },
+    { id: 269, name: "Tim Hardaway", position: "PG", team: "Warriors", rating: 90, era: "All-Time" },
+    { id: 270, name: "Draymond Green", position: "PF", team: "Warriors", rating: 89, era: "All-Time" },
+    { id: 271, name: "Sleepy Floyd", position: "PG", team: "Warriors", rating: 88, era: "All-Time" },
+    { id: 272, name: "Jason Richardson", position: "SG", team: "Warriors", rating: 87, era: "All-Time" },
+    { id: 273, name: "John Wall", position: "PG", team: "Wizards", rating: 89, era: "All-Time" },
+    { id: 274, name: "Bradley Beal", position: "SG", team: "Wizards", rating: 89, era: "All-Time" },
+    { id: 275, name: "Phil Chenier", position: "SG", team: "Wizards", rating: 88, era: "All-Time" },
+    { id: 276, name: "Caron Butler", position: "SF", team: "Wizards", rating: 88, era: "All-Time" },
+    { id: 277, name: "Antawn Jamison", position: "PF", team: "Wizards", rating: 87, era: "All-Time" },
+    { id: 278, name: "Don Ohl", position: "PG", team: "Wizards", rating: 87, era: "All-Time" },
+    { id: 279, name: "Jeff Ruland", position: "C", team: "Wizards", rating: 87, era: "All-Time" }];
+
+    // --- LOCAL STORAGE KEY ---
+    const SAVE_KEY = '2kDraftSessionV2'; // V2 to reset anyone with old save
+
+    // --- APPLICATION STATE ---
+    let state = {
+        availablePlayers: [],
+        teams: {
+            team1: [], // Will store objects: { slotId: 'T1-Slot-1', player: playerObject }
+            team2: []
+        },
+        currentTargetSlot: null, // This is the ID of the slot we're drafting for
+        rerollMode: 'idle', // 'idle', 'choosing_new_player', 'placing_new_player'
+        playerInHolding: null // Stores the player object chosen for rerolling
+    };
+
+    // --- DOM ELEMENTS ---
+    const draftControls = {
+        indicator: document.getElementById('draft-turn-indicator'),
+        teamSelection: {
+            team1: document.getElementById('draft-team-1'),
+            team2: document.getElementById('draft-team-2'),
+            buttons: document.querySelectorAll('#team-selection-buttons button')
+        },
+        poolButtons: document.querySelectorAll('.draft-pool-button'),
+        messageArea: document.getElementById('draft-message-area'),
+        resetButton: document.getElementById('resetButton')
+    };
+
+    const rerollControls = {
+        startButton: document.getElementById('start-reroll-button'),
+        cancelButton: document.getElementById('cancel-reroll-button'),
+        holdingSlot: document.getElementById('reroll-holding-slot')
+    };
+
+    const teamRosters = {
+        team1: document.getElementById('team-1-roster'),
+        team2: document.getElementById('team-2-roster')
+    };
+
+    const modal = {
+        element: document.getElementById('draftModal'),
+        title: document.getElementById('modal-title'),
+        choiceArea: document.getElementById('draft-choice-area'),
+        error: document.getElementById('modal-error')
+    };
+
+    const templates = {
+        playerCard: document.getElementById('player-card-template'),
+        rosterSlot: document.getElementById('roster-slot-template')
+    };
+
+    // --- LOCALSTORAGE FUNCTIONS ---
+
+    /**
+     * Saves the current application state to localStorage
+     */
+    function saveState() {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    }
+
+    /**
+     * Loads the application state from localStorage
+     * @returns {boolean} - True if state was loaded, false otherwise
+     */
+    function loadState() {
+        const savedState = localStorage.getItem(SAVE_KEY);
+        if (savedState) {
+            state = JSON.parse(savedState);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Clears the saved state from localStorage
+     */
+    function clearSave() {
+        localStorage.removeItem(SAVE_KEY);
+    }
+
+    // --- CORE FUNCTIONS ---
+
+    /**
+     * Shuffles an array in place (Fisher-Yates)
+     */
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    /**
+     * Creates 10 roster slots for a given team
+     */
+    function createTeamSlots(teamKey, rosterElement) {
+        const teamState = [];
+        rosterElement.innerHTML = ''; // Clear existing slots
+        for (let i = 1; i <= 10; i++) {
+            const slotId = `${teamKey}-Slot-${i}`;
+            const slot = templates.rosterSlot.content.cloneNode(true).firstElementChild;
+            slot.dataset.slotId = slotId;
+            slot.querySelector('.slot-position').textContent = `Slot ${i}`;
+            slot.querySelector('.slot-player-rating').classList.add('hidden'); // Hide rating on empty slot
+            rosterElement.appendChild(slot);
+            teamState.push({ slotId: slotId, player: null });
+        }
+        return teamState;
+    }
+
+    /**
+     * Initializes a NEW draft state (does not render)
+     */
+    function initializeDraftState() {
+        // Deep copy players into available pool
+        state.availablePlayers = JSON.parse(JSON.stringify(playerDatabase));
+        
+        // Create slots for both teams
+        state.teams.team1 = createTeamSlots('T1', teamRosters.team1);
+        state.teams.team2 = createTeamSlots('T2', teamRosters.team2);
+        
+        state.currentTargetSlot = null;
+        state.rerollMode = 'idle';
+        state.playerInHolding = null;
+        
+        saveState(); // Save the new, clean state
+    }
+    
+    /**
+     * Renders the entire UI based on the current 'state' object
+     */
+    function renderUIFromState() {
+        // Clear and render team rosters
+        teamRosters.team1.innerHTML = '';
+        teamRosters.team2.innerHTML = '';
+
+        state.teams.team1.forEach(slotData => {
+            const slot = templates.rosterSlot.content.cloneNode(true).firstElementChild;
+            slot.dataset.slotId = slotData.slotId;
+            teamRosters.team1.appendChild(slot);
+            updateRosterSlotUI(slotData.slotId, slotData.player);
+        });
+
+        state.teams.team2.forEach(slotData => {
+            const slot = templates.rosterSlot.content.cloneNode(true).firstElementChild;
+            slot.dataset.slotId = slotData.slotId;
+            teamRosters.team2.appendChild(slot);
+            updateRosterSlotUI(slotData.slotId, slotData.player);
+        });
+
+        sortTeamRoster('T1');
+        sortTeamRoster('T2');
+        
+        // Render reroll slot
+        updateHoldingSlotUI(state.playerInHolding);
+        
+        // Render controls
+        updateDraftControls();
+        modal.element.classList.add('hidden');
+    }
+
+    /**
+     * Updates the draft controls UI (turn indicator, button states)
+     */
+    function updateDraftControls() {
+        // Remove old highlights
+        document.querySelectorAll('.roster-slot.active-slot').forEach(el => el.classList.remove('active-slot'));
+        document.querySelectorAll('.roster-slot.replaceable').forEach(el => el.classList.remove('replaceable'));
+        draftControls.messageArea.textContent = '';
+
+        const team1Full = state.teams.team1.every(s => s.player !== null);
+        const team2Full = state.teams.team2.every(s => s.player !== null);
+        const team1HasPlayer = state.teams.team1.some(s => s.player);
+        const team2HasPlayer = state.teams.team2.some(s => s.player);
+        const anyTeamHasPlayer = team1HasPlayer || team2HasPlayer;
+
+        if (state.rerollMode === 'choosing_new_player') {
+            // --- STATE: Rerolling, choosing new player ---
+            draftControls.teamSelection.buttons.forEach(btn => btn.disabled = true);
+            draftControls.poolButtons.forEach(btn => btn.disabled = false);
+            rerollControls.startButton.disabled = true;
+            rerollControls.cancelButton.disabled = false;
+            draftControls.indicator.innerHTML = '<h3 class="text-2xl font-bold text-yellow-300">Reroll: Choose a new player from a pool</h3>';
+
+        } else if (state.rerollMode === 'placing_new_player') {
+            // --- STATE: Rerolling, placing new player ---
+            draftControls.teamSelection.buttons.forEach(btn => btn.disabled = true);
+            draftControls.poolButtons.forEach(btn => btn.disabled = true);
+            rerollControls.startButton.disabled = true;
+            rerollControls.cancelButton.disabled = false;
+            draftControls.indicator.innerHTML = `<h3 class="text-2xl font-bold text-yellow-300">Click a player to replace with ${state.playerInHolding.name}</h3>`;
+            // Highlight all *filled* roster slots as replaceable
+            document.querySelectorAll('.roster-slot').forEach(slot => {
+                const slotId = slot.dataset.slotId;
+                const teamState = slotId.startsWith('T1') ? state.teams.team1 : state.teams.team2;
+                const slotData = teamState.find(s => s.slotId === slotId);
+                if (slotData && slotData.player) {
+                    slot.classList.add('replaceable');
+                }
+            });
+
+        } else if (state.currentTargetSlot) {
+            // --- STATE: Actively drafting (normal) ---
+            draftControls.teamSelection.buttons.forEach(btn => btn.disabled = true);
+            draftControls.poolButtons.forEach(btn => btn.disabled = false);
+            rerollControls.startButton.disabled = true;
+            rerollControls.cancelButton.disabled = true;
+
+            // Update indicator text
+            const [teamKey, , num] = state.currentTargetSlot.split('-'); // e.g., "T1", "Slot", "1"
+            const teamName = teamKey === 'T1' ? "Team 1" : "Team 2";
+            const teamColor = teamKey === 'T1' ? "text-blue-300" : "text-red-300";
+            draftControls.indicator.innerHTML = `<h3 class="text-2xl font-bold ${teamColor}">Drafting for ${teamName}: Slot ${num}</h3>`;
+            
+            // Highlight the active slot
+            const activeSlot = document.querySelector(`.roster-slot[data-slot-id="${state.currentTargetSlot}"]`);
+            if (activeSlot) {
+                activeSlot.classList.add('active-slot');
+            }
+
+        } else {
+            // --- STATE: Idle, waiting to choose a team ---
+            draftControls.teamSelection.team1.disabled = team1Full;
+            draftControls.teamSelection.team2.disabled = team2Full;
+            draftControls.poolButtons.forEach(btn => btn.disabled = true);
+            rerollControls.startButton.disabled = !anyTeamHasPlayer; // Can only reroll if teams have players
+            rerollControls.cancelButton.disabled = true;
+
+            // Update indicator text
+            if (team1Full && team2Full) {
+                draftControls.indicator.innerHTML = '<h3 class="text-2xl font-bold text-green-400">DRAFT COMPLETE!</h3>';
+            } else {
+                draftControls.indicator.innerHTML = '<h3 class="text-2xl font-bold text-gray-300">Choose a team to draft for</h3>';
+            }
+        }
+    }
+
+    /**
+     * Finds the next empty slot for a team and sets it as the draft target
+     */
+    function startDraftForTeam(teamKey) {
+        const teamState = (teamKey === 'T1') ? state.teams.team1 : state.teams.team2;
+        const emptySlot = teamState.find(s => s.player === null);
+        
+        if (!emptySlot) {
+            draftControls.messageArea.textContent = `Team ${teamKey === 'T1' ? '1' : '2'} is full!`;
+            return;
+        }
+
+        state.rerollMode = 'idle';
+        state.currentTargetSlot = emptySlot.slotId;
+        updateDraftControls();
+    }
+
+    /**
+     * Shows the modal to choose between three players
+     */
+    function showDraftChoice(poolNum) {
+        const pools = {
+            '1': { min: 96, max: 99 },
+            '2': { min: 92, max: 95 },
+            '3': { min: 87, max: 91 }
+        };
+        const { min, max } = pools[poolNum];
+        
+        // Filter available players by pool ONLY
+        const eligiblePlayers = state.availablePlayers.filter(p =>
+            p.rating >= min && p.rating <= max
+        );
+
+        modal.choiceArea.innerHTML = '';
+        modal.error.textContent = '';
+
+        if (eligiblePlayers.length === 0) {
+            draftControls.messageArea.textContent = `No players left in Pool ${poolNum}! Try another pool.`;
+            return;
+        }
+
+        const numChoices = Math.min(3, eligiblePlayers.length);
+        const chosenPlayers = [];
+        const eligiblePlayerIndexes = Array.from({length: eligiblePlayers.length}, (_, i) => i);
+        shuffleArray(eligiblePlayerIndexes); // Shuffle indexes to pick random unique players
+
+        for (let i = 0; i < numChoices; i++) {
+            chosenPlayers.push(eligiblePlayers[eligiblePlayerIndexes[i]]);
+        }
+        
+        chosenPlayers.forEach(player => {
+            const card = createPlayerCard(player);
+            card.addEventListener('click', () => selectPlayer(player));
+            modal.choiceArea.appendChild(card);
+        });
+
+        modal.title.textContent = `Choose a Player (Pool ${poolNum})`;
+        modal.element.classList.remove('hidden');
+    }
+
+    /**
+     * Creates an HTML element for a player card
+     */
+    function createPlayerCard(player) {
+        const card = templates.playerCard.content.cloneNode(true).firstElementChild;
+        card.querySelector('.player-name').textContent = player.name;
+        card.querySelector('.player-rating').textContent = player.rating;
+        card.querySelector('.player-position').textContent = player.position;
+        card.querySelector('.player-team').textContent = player.team;
+        card.querySelector('.player-era').textContent = player.era;
+        card.dataset.playerId = player.id;
+        return card;
+    }
+
+    /**
+     * Sorts the team's roster UI by position (PG, SG, SF, PF, C, then Empty)
+     */
+    function sortTeamRoster(teamKey) {
+        const rosterElement = (teamKey === 'T1') ? teamRosters.team1 : teamRosters.team2;
+        const teamState = (teamKey === 'T1') ? state.teams.team1 : state.teams.team2;
+        
+        const positionOrder = { "PG": 1, "SG": 2, "SF": 3, "PF": 4, "C": 5, "Empty": 6 };
+
+        const slots = Array.from(rosterElement.querySelectorAll('.roster-slot'));
+
+        slots.sort((a, b) => {
+            const slotA_Id = a.dataset.slotId;
+            const slotB_Id = b.dataset.slotId;
+
+            const playerA = teamState.find(s => s.slotId === slotA_Id)?.player;
+            const playerB = teamState.find(s => s.slotId === slotB_Id)?.player;
+
+            const posA = playerA ? positionOrder[playerA.position] : positionOrder["Empty"];
+            const posB = playerB ? positionOrder[playerB.position] : positionOrder["Empty"];
+
+            return posA - posB;
+        });
+
+        slots.forEach(slot => rosterElement.appendChild(slot));
+    }
+
+    /**
+     * Handles the selection of a player from the modal
+     */
+    function selectPlayer(player) {
+        modal.element.classList.add('hidden');
+
+        // ONLY REMOVE THE SELECTED PLAYER from available pool
+        state.availablePlayers = state.availablePlayers.filter(p => p.id !== player.id);
+
+        if (state.rerollMode === 'choosing_new_player') {
+            // --- Reroll Workflow ---
+            state.playerInHolding = player;
+            state.rerollMode = 'placing_new_player';
+            updateHoldingSlotUI(player);
+
+        } else if (state.currentTargetSlot) {
+            // --- Normal Draft Workflow ---
+            const currentSlotId = state.currentTargetSlot;
+            const [teamKey] = currentSlotId.split('-');
+            const team = teamKey === 'T1' ? 'team1' : 'team2';
+
+            const slotIndex = state.teams[team].findIndex(s => s.slotId === currentSlotId);
+            if (slotIndex > -1) {
+                state.teams[team][slotIndex].player = player;
+            }
+
+            // Update the UI for that slot
+            updateRosterSlotUI(currentSlotId, player);
+            sortTeamRoster(teamKey);
+
+            state.currentTargetSlot = null; // Go back to "Choose team" state
+        }
+        
+        saveState(); // Save progress
+        updateDraftControls();
+    }
+
+    /**
+     * Starts the reroll process
+     */
+    function startReroll() {
+        if (state.rerollMode !== 'idle') return;
+        state.rerollMode = 'choosing_new_player';
+        state.currentTargetSlot = null;
+        state.playerInHolding = null;
+        clearHoldingSlotUI();
+        updateDraftControls();
+        // Don't save state here, wait for cancel or selection
+    }
+
+    /**
+     * Cancels the reroll process
+     */
+    function cancelReroll() {
+        if (state.playerInHolding) {
+            // Put player back into the available pool
+            state.availablePlayers.push(state.playerInHolding);
+        }
+        state.rerollMode = 'idle';
+        state.playerInHolding = null;
+        clearHoldingSlotUI();
+        saveState(); // Save the cancellation
+        updateDraftControls();
+    }
+
+    /**
+     * Handles clicking on a roster slot *during* the replacement phase
+     */
+    function handleReplacementClick(e) {
+        if (state.rerollMode !== 'placing_new_player' || !state.playerInHolding) return;
+
+        const clickedSlot = e.target.closest('.roster-slot');
+        if (!clickedSlot) return;
+
+        const slotId = clickedSlot.dataset.slotId;
+        const [teamKey] = slotId.split('-');
+        const team = teamKey === 'T1' ? 'team1' : 'team2';
+        const slotIndex = state.teams[team].findIndex(s => s.slotId === slotId);
+        
+        if (slotIndex === -1) return;
+
+        // Get the old player (if any)
+        const oldPlayer = state.teams[team][slotIndex].player;
+        
+        // The old player is NOT added back to state.availablePlayers
+
+        // Place the new player from holding
+        const newPlayer = state.playerInHolding;
+        state.teams[team][slotIndex].player = newPlayer;
+
+        // Update the UI for the slot that was clicked
+        updateRosterSlotUI(slotId, newPlayer);
+
+        // Reset the reroll state
+        state.rerollMode = 'idle';
+        state.playerInHolding = null;
+        clearHoldingSlotUI();
+        sortTeamRoster(teamKey);
+        saveState(); // Save the replacement
+        updateDraftControls();
+    }
+
+    /**
+     * Helper to update the UI of a specific roster slot
+     */
+    function updateRosterSlotUI(slotId, player) {
+        const slotElement = document.querySelector(`.roster-slot[data-slot-id="${slotId}"]`);
+        if (slotElement) {
+            const ratingSpan = slotElement.querySelector('.slot-player-rating'); // Get rating span
+            if (player) {
+                // *** UPDATED LINE ***
+                slotElement.querySelector('.slot-player-name').textContent = `${player.name} (${player.team} - ${player.era})`;
+                slotElement.querySelector('.slot-position').textContent = player.position;
+                // Show and set rating
+                ratingSpan.textContent = player.rating;
+                ratingSpan.classList.remove('hidden');
+            } else {
+                // Reset to empty
+                const [, , num] = slotId.split('-'); // T1-Slot-1
+                slotElement.querySelector('.slot-player-name').textContent = `- Empty -`;
+                slotElement.querySelector('.slot-position').textContent = `Slot ${num}`;
+                // Hide rating span
+                ratingSpan.classList.add('hidden');
+            }
+        }
+    }
+
+    /**
+     * Helper to update the Reroll Holding Slot UI
+     */
+    function updateHoldingSlotUI(player) {
+        const slot = rerollControls.holdingSlot;
+        const ratingSpan = slot.querySelector('.slot-player-rating'); // Get rating span
+        if (player) {
+            // *** UPDATED LINE ***
+            slot.querySelector('.slot-player-name').textContent = `${player.name} (${player.team} - ${player.era})`;
+            slot.querySelector('.slot-position').textContent = `New: ${player.position}`;
+            // Show and set rating
+            ratingSpan.textContent = player.rating;
+            ratingSpan.classList.remove('hidden');
+        } else {
+            clearHoldingSlotUI();
+        }
+    }
+
+    /**
+     * Helper to clear the Reroll Holding Slot UI
+     */
+    function clearHoldingSlotUI() {
+        const slot = rerollControls.holdingSlot;
+        slot.querySelector('.slot-player-name').textContent = `- Empty -`;
+        slot.querySelector('.slot-position').textContent = `Player to Place`;
+        slot.querySelector('.slot-player-rating').classList.add('hidden'); // Hide rating
+    }
+
+
+    // --- EVENT LISTENERS ---
+    
+    // Team Selection Buttons
+    draftControls.teamSelection.team1.addEventListener('click', () => startDraftForTeam('T1'));
+    draftControls.teamSelection.team2.addEventListener('click', () => startDraftForTeam('T2'));
+
+    // Pool Buttons
+    draftControls.poolButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+            showDraftChoice(e.target.dataset.pool);
+        });
+    });
+
+    // Reroll Buttons
+    rerollControls.startButton.addEventListener('click', startReroll);
+    rerollControls.cancelButton.addEventListener('click', cancelReroll);
+
+    // Modal Close
+    modal.element.addEventListener('click', (e) => {
+        if (e.target === modal.element) {
+            modal.element.classList.add('hidden');
+            // If we close modal while choosing a reroll, cancel the reroll
+            if (state.rerollMode === 'choosing_new_player') {
+                cancelReroll();
+            }
+        }
+    });
+
+    // Reset Button
+    draftControls.resetButton.addEventListener('click', () => {
+        clearSave(); // Clear the saved state
+        initializeDraftState(); // Create a new, clean state and save it
+        renderUIFromState(); // Render the new, clean UI
+    });
+
+    // Roster Click Listeners (for replacement)
+    teamRosters.team1.addEventListener('click', handleReplacementClick);
+    teamRosters.team2.addEventListener('click', handleReplacementClick);
+
+
+    // --- INITIALIZE ---
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!loadState()) {
+            // No save file found, start a fresh draft
+            initializeDraftState();
+        }
+        // Render whatever state was loaded or just initialized
+        renderUIFromState();
+    });
+
+</script>
+
+</body>
+</html>
